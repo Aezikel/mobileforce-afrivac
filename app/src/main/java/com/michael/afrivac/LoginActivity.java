@@ -9,9 +9,11 @@ import android.net.NetworkInfo;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Log;
+import android.util.Patterns;
 import android.view.View;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -23,6 +25,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.common.SignInButton;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.AuthResult;
 import com.google.firebase.auth.FirebaseAuth;
@@ -38,13 +41,14 @@ public class LoginActivity extends AppCompatActivity implements View.OnClickList
 
     private EditText email, password;
     private String Email, Password;
-    private TextView sign_in, signUp, forgotPassword;
+    private TextView sign_in, signUp, forgotPassword, resend_email_ver;
     private FirebaseAuth mAuth;
     private FirebaseUser user;
     private AuthViewModel authViewModel;
     private Helper helper;
-    private CompoundIconTextView googleSignIn, facebookSignIn;
+    private Button googleSignIn, facebookSignIn;
     private Animation animation;
+    private FirebaseAuth.AuthStateListener mAuthStateListener;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -53,11 +57,14 @@ public class LoginActivity extends AppCompatActivity implements View.OnClickList
 
         //initializing Google Signup features
 //        signInButton = findViewById(R.id.signin_with_google);
+        resend_email_ver = findViewById(R.id.resend_email_verification);
         email = findViewById(R.id.signin_email);
         password = findViewById(R.id.signin_password);
         sign_in = findViewById(R.id.singin_into_account);
         signUp = findViewById(R.id.singin_goto_signup);
         forgotPassword = findViewById(R.id.signin_forgot_password);
+
+        setupFirebaseAuth();
 
         helper = new Helper();
 
@@ -75,6 +82,13 @@ public class LoginActivity extends AppCompatActivity implements View.OnClickList
         signUp = findViewById(R.id.singin_goto_signup);
         forgotPassword = findViewById(R.id.signin_forgot_password);
 
+        resend_email_ver.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                ResendVerificationDialog verificationDialog = new ResendVerificationDialog();
+                verificationDialog.show(getSupportFragmentManager(), "resend_verification_dialog");
+            }
+        });
 
         sign_in.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -87,7 +101,27 @@ public class LoginActivity extends AppCompatActivity implements View.OnClickList
 
                     @Override
                     public void onAnimationEnd(Animation animation) {
-                        authViewModel.logIn(v);
+                        if(!isEmpty(email.getText().toString()) && !isEmpty(password.getText().toString())){
+                            FirebaseAuth.getInstance().signInWithEmailAndPassword(email.getText().toString(), password.getText().toString())
+                                    .addOnCompleteListener(new OnCompleteListener<AuthResult>() {
+                                        @Override
+                                        public void onComplete(@NonNull Task<AuthResult> task) {
+                                        }
+                                    }).addOnFailureListener(new OnFailureListener() {
+                                @Override
+                                public void onFailure(@NonNull Exception e) {
+                                    String message = e.getMessage();
+                                    Toast.makeText(LoginActivity.this, "Error Occurred " + message,
+                                            Toast.LENGTH_SHORT).show();
+                                }
+                            });
+                        }else if(isEmpty(email.getText().toString())) {
+                            Toast.makeText(LoginActivity.this, "Please enter email", Toast.LENGTH_SHORT).show();
+                        } else if (isEmpty(password.getText().toString())) {
+                            Toast.makeText(LoginActivity.this, "Please enter password", Toast.LENGTH_SHORT).show();
+                        } else if(!Patterns.EMAIL_ADDRESS.matcher(email.getText().toString()).matches()){
+                            Toast.makeText(LoginActivity.this, "Please enter valid email", Toast.LENGTH_SHORT).show();
+                        }
                     }
 
                     @Override
@@ -146,7 +180,9 @@ public class LoginActivity extends AppCompatActivity implements View.OnClickList
         forgotPassword.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                startActivity(new Intent(getApplicationContext(), ForgetPasswordActivity.class));
+
+                startActivity(new Intent(getApplicationContext(), ForgotAuthFirstActivity.class));
+
                 finish();
             }
         });
@@ -242,14 +278,51 @@ public class LoginActivity extends AppCompatActivity implements View.OnClickList
         NetworkInfo activeNetworkInfo = connectivityManager.getActiveNetworkInfo();
         return activeNetworkInfo != null && activeNetworkInfo.isConnected();
     }
+//    @Override
+//    public void onStart() {
+//        super.onStart();
+//        user = FirebaseAuth.getInstance().getCurrentUser();
+//        if(user != null){
+//            helper.toastMessage(this, getString(R.string.userId)+ user.getUid());
+//            helper.gotoMainActivity(this);
+//        }
+//
+//        // Check for existing Google Sign In account, if the user is already signed in
+//        // the GoogleSignInAccount will be non-null.
+//        GoogleSignInAccount account = GoogleSignIn.getLastSignedInAccount(this);
+//        if (account != null){
+//            startActivity(new Intent (LoginActivity.this, MainActivity.class));
+//        }
+//        super.onStart();
+//
+//    }
+
+    private void setupFirebaseAuth(){
+        mAuthStateListener = new FirebaseAuth.AuthStateListener(){
+            @Override
+            public void onAuthStateChanged(@NonNull FirebaseAuth firebaseAuth) {
+                FirebaseUser user = firebaseAuth.getCurrentUser();
+                if(user!=null){
+                    if (user.isEmailVerified()){
+                        Intent intent = new Intent(LoginActivity.this, MainActivity.class);
+                        startActivity(intent);
+                        finish();
+                        Toast.makeText(LoginActivity.this, "Authenticated with " + user.getEmail(),
+                                Toast.LENGTH_SHORT).show();
+                    }else{
+                        Toast.makeText(LoginActivity.this, "Please check your email inbox for your verification link",
+                                Toast.LENGTH_SHORT).show();
+                        FirebaseAuth.getInstance().signOut();
+                    }
+                }
+            }
+        };
+    }
+
     @Override
     public void onStart() {
         super.onStart();
-        user = FirebaseAuth.getInstance().getCurrentUser();
-        if(user != null){
-            helper.toastMessage(this, getString(R.string.userId)+ user.getUid());
-            helper.gotoMainActivity(this);
-        }
+        mAuth.addAuthStateListener(mAuthStateListener);
 
         // Check for existing Google Sign In account, if the user is already signed in
         // the GoogleSignInAccount will be non-null.
@@ -258,7 +331,16 @@ public class LoginActivity extends AppCompatActivity implements View.OnClickList
             startActivity(new Intent (LoginActivity.this, MainActivity.class));
         }
         super.onStart();
-
+    }
+    @Override
+    public void onStop() {
+        super.onStop();
+        if (mAuthStateListener != null) {
+            FirebaseAuth.getInstance().removeAuthStateListener(mAuthStateListener);
+        }
+    }
+    private boolean isEmpty(String string) {
+        return string.equals("");
     }
 
 

@@ -12,6 +12,8 @@
     <color name="drawerColor">#3913B8</color>
     <color name="aColor">#8352fd</color>
 
+    <color name="newColor">#94919191</color>
+
     <color name="stroke">#C4C4C4</color>
     <color name="textColor">#464646</color>
     <color name="roundBtn">#3913B8</color>
@@ -23,4 +25,7 @@
     <color name="ScreenBackground">#F2F6FF</color>
     <color name="sub_text_blue">#3913B8</color>
     <color name="description_color">#464646</color>
+    <color name="indicator">#DAD1FA</color>
+
+    <color name ="linkBlue"> #008cff </color>
 </resources>
